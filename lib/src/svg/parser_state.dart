@@ -1415,7 +1415,7 @@ class SvgParserState {
         (fillColor == null || parentFill == DrawablePaint.empty)) {
       return null;
     }
-    if (rawFill == 'none') {
+    if (rawFill == 'none' || rawFill == 'transparent') {
       return DrawablePaint.empty;
     }
 
