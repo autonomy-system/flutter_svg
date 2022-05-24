@@ -1,3 +1,5 @@
+import 'package:flutter_svg/src/svg/parsers.dart';
+
 /// Parses a [rawDouble] `String` to a `double`.
 ///
 /// The [rawDouble] might include a unit (`px`, `em` or `ex`)
@@ -10,11 +12,16 @@ double? parseDouble(String? rawDouble, {bool tryParse = false}) {
     return null;
   }
 
+  if (isPercentage(rawDouble)) {
+    return parsePercentage(rawDouble);
+  }
+
   rawDouble = rawDouble
       .replaceFirst('rem', '')
       .replaceFirst('em', '')
       .replaceFirst('ex', '')
       .replaceFirst('px', '')
+      .replaceFirst('pt', '')
       .trim();
 
   if (tryParse) {
