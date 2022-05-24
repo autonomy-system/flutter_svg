@@ -615,10 +615,8 @@ class _Elements {
           lastTextInfo?.style ?? parserState.currentGroup!.style;
 
       textInfos.add(_TextInfo(
-        parserState.parseStyle(
-          parserState.rootBounds,
-          parentStyle,
-        ),
+        parserState.parseStyle(parserState.rootBounds, parentStyle,
+            defaultFillColor: colorBlack),
         currentOffset,
         transform,
       ));
