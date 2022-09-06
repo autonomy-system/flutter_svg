@@ -115,4 +115,36 @@ void main() {
 
     recorder.endRecording();
   });
+
+  test('Does not draw if color is null', () async {
+    final DrawableShape shape = DrawableShape(
+      'test',
+      Path()..addRect(const Rect.fromLTRB(0, 0, 50, 50)),
+      const DrawableStyle(
+        fill: DrawablePaint(PaintingStyle.fill),
+        stroke: DrawablePaint(PaintingStyle.stroke),
+      ),
+    );
+
+    final PathRecordingCanvas canvas = PathRecordingCanvas();
+    shape.draw(canvas, Rect.largest);
+
+    expect(canvas.paths.length, 0);
+    expect(canvas.paints.length, 0);
+  });
+}
+
+class PathRecordingCanvas implements Canvas {
+  final List<Path> paths = <Path>[];
+  final List<Paint> paints = <Paint>[];
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) {
+    if (invocation.memberName == #drawPath) {
+      paths.add(invocation.positionalArguments.first as Path);
+      paints.add(invocation.positionalArguments.last as Paint);
+      return;
+    }
+    return super.noSuchMethod(invocation);
+  }
 }

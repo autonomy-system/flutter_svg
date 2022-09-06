@@ -87,11 +87,10 @@ class _Elements {
 
     final String? id = parserState.attribute('id', def: '');
 
-    final Color? color =
-        parserState.parseColor(parserState.attribute('color', def: null)) ??
-            // Fallback to the currentColor from theme if no color is defined
-            // on the root SVG element.
-            parserState.theme.currentColor;
+    final Color? color = parserState.parseColor(
+      parserState.attribute('color', def: null),
+      currentColor: parserState.theme.currentColor,
+    );
 
     // TODO(dnfield): Support nested SVG elements. https://github.com/dnfield/flutter_svg/issues/132
     if (parserState._root != null) {
@@ -144,9 +143,10 @@ class _Elements {
       return null;
     }
     final DrawableParent parent = parserState.currentGroup!;
-    final Color? color =
-        parserState.parseColor(parserState.attribute('color', def: null)) ??
-            parent.color;
+    final Color? color = parserState.parseColor(
+            parserState.attribute('color', def: null),
+            currentColor: parent.color ?? parserState.theme.currentColor) ??
+        parent.color;
 
     final DrawableGroup group = DrawableGroup(
       parserState.attribute('id', def: ''),
@@ -164,9 +164,10 @@ class _Elements {
   static Future<void>? symbol(
       SvgParserState parserState, bool warningsAsErrors) {
     final DrawableParent parent = parserState.currentGroup!;
-    final Color? color =
-        parserState.parseColor(parserState.attribute('color', def: null)) ??
-            parent.color;
+    final Color? color = parserState.parseColor(
+            parserState.attribute('color', def: null),
+            currentColor: parent.color ?? parserState.theme.currentColor) ??
+        parent.color;
 
     final DrawableGroup group = DrawableGroup(
       parserState.attribute('id', def: ''),
@@ -240,7 +241,8 @@ class _Elements {
           def: '1',
         )!;
         final Color stopColor = parserState.parseColor(
-                getAttribute(parserState.attributes, 'stop-color')) ??
+                getAttribute(parserState.attributes, 'stop-color'),
+                currentColor: parent.color ?? parserState.theme.currentColor) ??
             parent.color ??
             colorBlack;
         colors.add(stopColor.withOpacity(parseDouble(rawOpacity)!));
@@ -519,15 +521,13 @@ class _Elements {
         parserState.attribute('y', def: '0'),
       )!,
     );
-    final Size size = Size(
-      parserState.parseDoubleWithUnits(
-        parserState.attribute('width', def: '0'),
-      )!,
-      parserState.parseDoubleWithUnits(
-        parserState.attribute('height', def: '0'),
-      )!,
-    );
     final Image image = await resolveImage(href);
+    final Size size = Size(
+      parserState.parseDoubleWithUnits(parserState.attribute('width')) ??
+          image.width.toDouble(),
+      parserState.parseDoubleWithUnits(parserState.attribute('height')) ??
+          image.height.toDouble(),
+    );
     final DrawableParent parent = parserState._parentDrawables.last.drawable!;
     final DrawableStyle? parentStyle = parent.style;
     final DrawableRasterImage drawable = DrawableRasterImage(
@@ -790,7 +790,7 @@ class SvgParserState {
     this.theme,
     this._key,
     this._warningsAsErrors,
-  )   
+  )
   // ignore: unnecessary_null_comparison
   : assert(events != null),
         _eventIterator = events.iterator;
@@ -1024,6 +1024,16 @@ class SvgParserState {
     }
   }
 
+  /// The number of pixels per CSS inch.
+  static const int kCssPixelsPerInch = 96;
+
+  /// The number of points per CSS inch.
+  static const int kCssPointsPerInch = 72;
+
+  /// The multiplicand to convert from CSS points to pixels.
+  static const double kPointsToPixelFactor =
+      kCssPixelsPerInch / kCssPointsPerInch;
+
   /// Parses a `rawDouble` `String` to a `double`
   /// taking into account absolute and relative units
   /// (`px`, `em` or `ex`).
@@ -1044,18 +1054,23 @@ class SvgParserState {
     String? rawDouble, {
     bool tryParse = false,
   }) {
-    double unit = 1.0;
+    if (rawDouble == null) {
+      return null;
+    }
 
+    double unit = 1.0;
     // 1 rem unit is equal to the root font size.
     // 1 em unit is equal to the current font size.
     // 1 ex unit is equal to the current x-height.
-    if (rawDouble?.contains('rem') ?? false) {
+    if (rawDouble.contains('pt')) {
+      unit = kPointsToPixelFactor;
+    } else if (rawDouble.contains('rem')) {
       _compatibilityTester.usesFontSize = true;
       unit = theme.fontSize;
-    } else if (rawDouble?.contains('em') ?? false) {
+    } else if (rawDouble.contains('em')) {
       _compatibilityTester.usesFontSize = true;
       unit = theme.fontSize;
-    } else if (rawDouble?.contains('ex') ?? false) {
+    } else if (rawDouble.contains('ex')) {
       _compatibilityTester.usesFontSize = true;
       unit = theme.xHeight;
     }
@@ -1337,7 +1352,7 @@ class SvgParserState {
       );
       strokeColor = definitionPaint.color;
     } else {
-      strokeColor = parseColor(rawStroke);
+      strokeColor = parseColor(rawStroke, currentColor: currentColor);
     }
 
     final DrawablePaint paint = DrawablePaint(
@@ -1431,8 +1446,7 @@ class SvgParserState {
     Color? defaultFillColor,
     Color? currentColor,
   ) {
-    final Color? color = parseColor(rawFill) ??
-        currentColor ??
+    final Color? color = parseColor(rawFill, currentColor: currentColor) ??
         parentFillColor ??
         defaultFillColor;
 
@@ -1632,6 +1646,7 @@ class SvgParserState {
         ),
         decorationColor: parseColor(
           getAttribute(attributes, 'text-decoration-color', def: null),
+          currentColor: currentColor,
         ),
         decorationStyle: parseTextDecorationStyle(
           getAttribute(attributes, 'text-decoration-style', def: null),
@@ -1642,7 +1657,7 @@ class SvgParserState {
   }
 
   /// Converts a SVG Color String (either a # prefixed color string or a named color) to a [Color].
-  Color? parseColor(String? colorString) {
+  Color? parseColor(String? colorString, {Color? currentColor}) {
     if (colorString == null || colorString.isEmpty) {
       return null;
     }
@@ -1653,7 +1668,7 @@ class SvgParserState {
 
     if (colorString.toLowerCase() == 'currentcolor') {
       _compatibilityTester.usesCurrentColor = true;
-      return null;
+      return currentColor ?? theme.currentColor;
     }
 
     // handle hex colors e.g. #fff or #ffffff.  This supports #RRGGBBAA
